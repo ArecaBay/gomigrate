@@ -20,7 +20,7 @@ var (
 
 func GetMigrator(test string) *Migrator {
 	path := fmt.Sprintf("test_migrations/%s_%s", test, dbType)
-	m, err := NewMigrator(db, adapter, path)
+	m, err := NewMigrator(db, "svc1", adapter, path)
 	if err != nil {
 		panic(err)
 	}
@@ -57,10 +57,12 @@ func TestNewMigrator(t *testing.T) {
 
 func TestCreatingMigratorWhenTableExists(t *testing.T) {
 	// Create the table and populate it with a row.
+	adapter.SetMigrationTableName("gomigrate_svc1")
 	_, err := db.Exec(adapter.CreateMigrationTableSql())
 	if err != nil {
 		t.Error(err)
 	}
+
 	_, err = db.Exec(adapter.MigrationLogInsertSql(), 123)
 	if err != nil {
 		t.Error(err)
@@ -69,7 +71,7 @@ func TestCreatingMigratorWhenTableExists(t *testing.T) {
 	GetMigrator("test1")
 
 	// Check that our row is still present.
-	row := db.QueryRow("select migration_id from gomigrate")
+	row := db.QueryRow("select migration_id from gomigrate_svc1")
 	var id uint64
 	err = row.Scan(&id)
 	if err != nil {
@@ -83,21 +85,19 @@ func TestCreatingMigratorWhenTableExists(t *testing.T) {
 
 func TestMigrationAndRollback(t *testing.T) {
 	m := GetMigrator("test1")
-
+	adapter.SetMigrationTableName("gomigrate_svc1")
 	if err := m.Migrate(); err != nil {
 		t.Error(err)
 	}
-
 	// Ensure that the migration ran.
 	row := db.QueryRow(
 		adapter.SelectMigrationTableSql(),
-		"test",
 	)
 	var tableName string
 	if err := row.Scan(&tableName); err != nil {
 		t.Error(err)
 	}
-	if tableName != "test" {
+	if tableName != "gomigrate_svc1" {
 		t.Errorf("Migration table not created")
 	}
 	// Ensure that the migrate status is correct.
@@ -119,7 +119,6 @@ func TestMigrationAndRollback(t *testing.T) {
 	// Ensure that the down migration ran.
 	row = db.QueryRow(
 		adapter.SelectMigrationTableSql(),
-		"test",
 	)
 	err := row.Scan(&tableName)
 	if err != nil && err != sql.ErrNoRows {
@@ -142,7 +141,7 @@ func TestMigrationAndRollback(t *testing.T) {
 }
 
 func cleanup() {
-	_, err := db.Exec("drop table gomigrate")
+	_, err := db.Exec("drop table gomigrate_svc1")
 	if err != nil {
 		panic(err)
 	}
@@ -155,20 +154,20 @@ func init() {
 	case "mysql":
 		dbType = "mysql"
 		log.Print("Using mysql")
-		adapter = Mariadb{}
+		adapter = &Mariadb{}
 		db, err = sql.Open("mysql", "gomigrate:password@/gomigrate")
 	case "sqlite3":
 		dbType = "sqlite3"
 		log.Print("Using sqlite3")
-		adapter = Sqlite3{}
+		adapter = &Sqlite3{}
 		db, err = sql.Open("sqlite3", "file::memory:?cache=shared")
 	default:
 		dbType = "pg"
 		log.Print("Using postgres")
-		adapter = Postgres{}
-		db, err = sql.Open("postgres", "host=localhost dbname=gomigrate sslmode=disable")
+		adapter = &Postgres{}
+		db, err = sql.Open("postgres", "host=localhost user=postgres password=Hp48y8lvxJCWR0dp dbname=gomigrate sslmode=disable")
 	}
-
+	adapter.SetMigrationTableName("gomigrate_svc1")
 	if err != nil {
 		panic(err)
 	}

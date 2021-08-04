@@ -45,7 +45,7 @@ type Logger interface {
 
 // Returns true if the migration table already exists.
 func (m *Migrator) MigrationTableExists() (bool, error) {
-	row := m.DB.QueryRow(m.dbAdapter.SelectMigrationTableSql(), migrationTableName)
+	row := m.DB.QueryRow(m.dbAdapter.SelectMigrationTableSql())
 	var tableName string
 	err := row.Scan(&tableName)
 	if err == sql.ErrNoRows {
@@ -73,13 +73,14 @@ func (m *Migrator) CreateMigrationsTable() error {
 }
 
 // Returns a new migrator.
-func NewMigrator(db *sql.DB, adapter Migratable, migrationsPath string) (*Migrator, error) {
-	return NewMigratorWithLogger(db, adapter, migrationsPath, log.New(os.Stderr, "[gomigrate] ", log.LstdFlags))
+func NewMigrator(db *sql.DB, serviceName string, adapter Migratable, migrationsPath string) (*Migrator, error) {
+	return NewMigratorWithLogger(db, serviceName, adapter, migrationsPath, log.New(os.Stderr, "[gomigrate] ", log.LstdFlags))
 }
 
 // Returns a new migrator with the specified logger.
-func NewMigratorWithLogger(db *sql.DB, adapter Migratable, migrationsPath string, logger Logger) (*Migrator, error) {
+func NewMigratorWithLogger(db *sql.DB, serviceName string, adapter Migratable, migrationsPath string, logger Logger) (*Migrator, error) {
 	// Normalize the migrations path.
+	var tableName string
 	path := []byte(migrationsPath)
 	pathLength := len(path)
 	if path[pathLength-1] != '/' {
@@ -87,7 +88,12 @@ func NewMigratorWithLogger(db *sql.DB, adapter Migratable, migrationsPath string
 	}
 
 	logger.Printf("Migrations path: %s", path)
-
+	if len(serviceName) == 0 {
+		tableName = "gomigrate"
+	} else {
+		tableName = "gomigrate" + "_" + serviceName
+	}
+	adapter.SetMigrationTableName(tableName)
 	migrator := Migrator{
 		db,
 		string(path),
