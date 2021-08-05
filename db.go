@@ -1,7 +1,6 @@
 package gomigrate
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -22,7 +21,6 @@ type Postgres struct {
 }
 
 func (p *Postgres) SelectMigrationTableSql() string {
-	fmt.Println(p.TableName)
 	return "SELECT tablename FROM pg_catalog.pg_tables WHERE tablename = '" + p.TableName + "'"
 }
 
